@@ -50,22 +50,22 @@ cd DataChatbot
 
 ### 2. Criar um Ambiente Virtual e Instalar as Dependências
 
-# Criar o ambiente virtual
+#### Criar o ambiente virtual
 python -m venv .venv
 
-# Ativar o ambiente virtual
-# No Windows:
+##### Ativar o ambiente virtual
+ No Windows:
 .venv\Scripts\activate
-# No macOS/Linux:
+No macOS/Linux:
 source .venv/bin/activate
 
-# Instalar as bibliotecas necessárias
+#### Instalar as bibliotecas necessárias
 pip install -r requirements.txt
 
 ### 3. Configurar as Variáveis de Ambiente
 
 Crie um ficheiro chamado .env na raiz do projeto. Este ficheiro guardará as suas credenciais de forma segura.
-# No ficheiro .env
+#### No ficheiro .env
 GOOGLE_API_KEY="sua_chave_secreta_do_google_aqui"
 DATABASE_URL="postgresql://seu_usuario:sua_senha@localhost:5432/nome_do_seu_banco"
 
