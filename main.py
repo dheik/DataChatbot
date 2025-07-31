@@ -1,7 +1,7 @@
 import os
 import sys
 from io import StringIO
-from typing import Optional
+from typing import Optional, List
 import pandas as pd
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -19,6 +19,7 @@ class DataChatbot:
         self.df: Optional[pd.DataFrame] = None
         self.engine: Optional[Engine] = None
         self.data_source_name: Optional[str] = None
+        self.history: List[str] = []
 
     def _initialize_model(self) -> Optional[genai.GenerativeModel]:
         load_dotenv()
@@ -170,12 +171,24 @@ class DataChatbot:
             sys.exit(1)
 
         self.console.print(f"\n[green]Dados carregados com sucesso! Colunas: {', '.join(self.df.columns)}[/green]")
-        self.console.print("Faça suas perguntas. Digite 'sair' para terminar.")
+        self.console.print("Faça suas perguntas. Digite 'historico' para ver suas pesquisas ou 'sair' para terminar.")
 
         while True:
             question = Prompt.ask(">")
             if question.lower() == 'sair':
                 break
+
+            if question.lower() == 'historico':
+                self.console.print("\n[bold cyan]-- Histórico de Pesquisas --[/bold cyan]")
+                if not self.history:
+                    self.console.print("Nenhuma pesquisa feita ainda.")
+                else:
+                    for i, item in enumerate(self.history, 1):
+                        self.console.print(f"{i}. {item}")
+                self.console.print("[bold cyan]---------------------------[/bold cyan]")
+                continue
+            self.history.append(question)
+
             generated_code = self._generate_code(question)
             if generated_code:
                 self._execute_code(generated_code)
