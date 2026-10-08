@@ -1,97 +1,130 @@
-# DataChatbot: Assistente de Análise de Dados com IA
+# DataDex — Pokédex com IA que não inventa respostas
 
-## 📖 Sobre o Projeto
+Evolução do [DataChatbot](https://github.com/dheik/DataChatbot): em vez de gerar código pandas no terminal,
+o DataDex é um produto web/mobile em que você pergunta sobre Pokémon em português e o
+**Gemini traduz a pergunta em SQL**. A API executa essa consulta, com segurança, em um banco montado com os
+dados oficiais da **PokéAPI**, e o app mostra exatamente os Pokémon que o banco devolveu.
 
-O **DataChatbot** é uma aplicação de linha de comando desenvolvida em Python que atua como uma ponte inteligente entre a linguagem humana e a análise de dados técnica. A ferramenta permite que utilizadores façam perguntas em português sobre um conjunto de dados e, utilizando o poder do modelo de linguagem **Google Gemini**, traduz essas perguntas em código Python/Pandas executável.
+> Exemplo: *"Qual o Pokémon de fogo com os status base mais altos da região de Alola?"*
+> → o Gemini gera `SELECT ... WHERE (type1='fire' OR type2='fire') AND region='alola' ORDER BY total DESC LIMIT 1`
+> → o banco devolve **Blacephalon (Fogo/Fantasma, total 570)** → o app mostra o card.
 
-O objetivo principal é democratizar o acesso a insights e acelerar o fluxo de trabalho de análise, permitindo que tanto utilizadores técnicos quanto não-técnicos possam "conversar" com os seus dados.
+Como a resposta vem do banco, a IA não tem como "alucinar" um Pokémon ou um status: no máximo ela escreve
+uma consulta errada, e essa consulta fica visível no app para conferência.
 
----
+![Demonstração](docs/screenshots/alola.png)
 
-## ✨ Funcionalidades Principais
+## Arquitetura
 
-* **Tradução de Linguagem Natural:** Converte perguntas complexas em código Pandas preciso.
-* **Conectividade Híbrida:** Suporta a ingestão de dados de duas fontes distintas:
-    * Bancos de dados **PostgreSQL** robustos e escaláveis.
-    * Ficheiros locais como **CSV** e **Excel** para exploração rápida.
-* **Execução Segura:** Apresenta todo o código gerado pela IA para revisão e exige confirmação explícita do utilizador antes de o executar.
-* **Interface Interativa:** Utiliza a biblioteca `rich` para fornecer uma experiência de utilizador clara, colorida e amigável no terminal.
-* **Motor de IA de Ponta:** Integrado com a API do **gemini-2.5-pro** para garantir a melhor interpretação de contexto e geração de código.
+```
+┌──────────────────────┐  POST /api/ask   ┌─────────────────────────┐   prompt + esquema   ┌──────────────┐
+│ App React Native     │ ───────────────▶ │ API DataDex (FastAPI)   │ ───────────────────▶ │ API Gemini   │
+│ (Expo: web/Android/  │ ◀─────────────── │ validações, regras,     │ ◀─────────────────── │ SQL em JSON  │
+│  iOS)                │   JSON + cards   │ execução segura do SQL  │                      └──────────────┘
+└──────────────────────┘                  │                         │   SELECT (somente leitura)
+                                          │                         │ ───────────────────▶ ┌──────────────┐
+                                          └─────────────────────────┘                      │ SQLite       │
+                                                                                           │ (PokéAPI)    │
+                                                                                           └──────────────┘
+```
 
----
+Fluxo de uma pergunta (`backend/app/services.py`):
 
-## 🛠️ Tecnologias Utilizadas
+1. **Valida a pergunta** (3 a 300 caracteres, precisa ter texto).
+2. **Gemini gera o SQL** a partir do esquema real do banco, com saída JSON `{answerable, sql, explanation}` e temperatura 0.
+3. **Valida e executa** o SQL: uma única instrução `SELECT`, conexão somente leitura, *authorizer* do SQLite liberando
+   apenas as tabelas `pokemon` e `pokemon_abilities`, tempo limite de 2 s e no máximo 50 linhas.
+4. Se o SQL der erro de execução, o **Gemini corrige uma vez**. SQL bloqueado por segurança nunca é reenviado.
+5. Se a consulta trouxe a coluna `id`, a API monta os **cards** completos (tipos, status, habilidades, sprite);
+   senão devolve uma **tabela** (contagens, médias).
+6. O **Gemini escreve um resumo** de 1 a 3 frases usando só as linhas retornadas.
 
-Este projeto foi construído utilizando um conjunto de tecnologias modernas e padrão de mercado no ecossistema Python:
+Outras regras: perguntas fora do tema retornam `422 not_answerable`; Mega e Gigantamax ficam de fora a não ser que
+o usuário peça; perguntas repetidas voltam do cache; perguntas de continuação ("e os de água?") usam as 3 últimas
+perguntas da sessão; limite de 20 perguntas por minuto por IP; todos os erros seguem o formato
+`{"error": {"code", "message"}}`.
 
-* **Linguagem:** Python 3.x
-* **Análise de Dados:** Pandas
-* **Inteligência Artificial:** Google Gemini API (`google-generativeai`)
-* **Banco de Dados:** PostgreSQL
-* **Conexão com BD:** SQLAlchemy & Psycopg2
-* **Interface de Terminal:** Rich
-* **Gestão de Segredos:** Python-dotenv
+## Estrutura
 
----
+```
+pokedex-ai/
+├── backend/
+│   ├── app/
+│   │   ├── main.py        # rotas FastAPI, tratamento de erros, rate limit
+│   │   ├── services.py    # regras de negócio (fluxo da pergunta)
+│   │   ├── database.py    # execução segura do SQL gerado pela IA
+│   │   ├── llm.py         # integração com o Gemini (google-genai)
+│   │   ├── prompts.py     # prompts (evolução do prompt_template.py original)
+│   │   └── config.py      # configurações via .env
+│   ├── data/pokemon.db    # banco pronto (1.323 Pokémon e formas)
+│   ├── build_db.py        # recria o banco a partir dos CSVs da PokéAPI
+│   ├── tests/test_api.py  # 17 testes com um Gemini falso
+│   └── requirements.txt
+├── frontend/              # app React Native (Expo)
+│   ├── App.tsx
+│   └── src/ (api.ts, theme.ts, components/)
+└── docs/
+    ├── DataDex_Apresentacao.pptx
+    └── screenshots/
+```
 
-## 🚀 Instalação e Configuração
+## Como rodar
 
-Siga os passos abaixo para executar o projeto localmente.
+### 1. Backend (Python 3.10+)
 
-### Pré-requisitos
-
-* Python 3.8 ou superior
-* Um servidor PostgreSQL instalado e em execução
-
-### 1. Clonar o Repositórios
-
-git clone [https://github.com/dheik/DataChatbot.git](https://github.com/dheik/DataChatbot.git)
-cd DataChatbot
-
-### 2. Criar um Ambiente Virtual e Instalar as Dependências
-
-#### Criar o ambiente virtual
+```bash
+cd backend
 python -m venv .venv
-
-##### Ativar o ambiente virtual
- No Windows:
-.venv\Scripts\activate
-No macOS/Linux:
-source .venv/bin/activate
-
-#### Instalar as bibliotecas necessárias
+# Windows: .venv\Scripts\activate    |    macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env        # e coloque sua GEMINI_API_KEY
+uvicorn app.main:app --reload --port 8000
+```
 
-### 3. Configurar as Variáveis de Ambiente
+A documentação interativa fica em http://localhost:8000/docs.
+O banco `data/pokemon.db` já vem pronto. Para recriá-lo com os dados mais recentes da PokéAPI: `python build_db.py --refresh`.
 
-Crie um ficheiro chamado .env na raiz do projeto. Este ficheiro guardará as suas credenciais de forma segura.
-#### No ficheiro .env
-GOOGLE_API_KEY="sua_chave_secreta_do_google_aqui"
-DATABASE_URL="postgresql://seu_usuario:sua_senha@localhost:5432/nome_do_seu_banco"
+Testes (não usam internet nem gastam cota do Gemini): `python -m pytest -q`
 
-Substitua os valores pelos seus dados reais.
+### 2. Frontend (Node 18+)
 
-### 4. Configurar o Banco de Dados (Opcional)
+```bash
+cd frontend
+npm install
+npx expo start --web        # abre no navegador
+# ou: npx expo start  e escaneie o QR code com o app Expo Go no celular
+```
 
-Para testar a funcionalidade completa com o PostgreSQL, certifique-se de que o seu banco de dados e as suas tabelas estão criados. O chatbot irá listar as tabelas disponíveis para análise.
+Por padrão o app chama `http://localhost:8000` (no emulador Android, `http://10.0.2.2:8000`).
+Para usar no celular físico, aponte para o IP do seu computador:
 
-### 🏃 Como Usar
-Com o ambiente configurado, execute o chatbot a partir do seu terminal:
-python chatbot_final.py
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.0.10:8000 npx expo start
+```
 
-O programa irá cumprimentá-lo e perguntar de onde deseja carregar os dados. Siga as instruções no ecrã e comece a fazer as suas perguntas!
+## Endpoints
 
-### 🧠 Aprendizados e Desafios
-Este projeto foi de grande aprendizagem para mim, com muitos desafios e horas de persistência. A maior complexidade não estava em um único algoritmo, mas na arquitetura do código em si: orquestrar bibliotecas distintas como o Pandas e a API do Gemini, garantindo que a saída de uma servisse como a entrada correta para a outra. Desenvolver a lógica para gerar e executar código dinamicamente de forma segura, usando exec(), foi um desafio particular que testou a minha resiliência. Essa jornada ensinou-me a pensar como um engenheiro de software, focando em criar um código modular e robusto, e a arte do "prompt engineering" para instruir a IA a gerar saídas precisas e funcionais.
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/ask` | `{ "question": "...", "session_id": "..." }` → resposta, SQL, cards ou tabela |
+| GET | `/api/pokemon/{id}` | Ficha completa de um Pokémon |
+| GET | `/api/examples` | Perguntas de exemplo |
+| GET | `/api/history` | Últimas 50 perguntas feitas |
+| GET | `/api/health` | Status da API e do banco |
 
-### 🔮 Melhorias Futuras
-[ ] Criar uma interface web com Flask ou FastAPI.
+## Configuração (`backend/.env`)
 
-[ ] Suporte para visualização de dados (gerar gráficos com Matplotlib/Seaborn).
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `GEMINI_API_KEY` | — | Chave do Google AI Studio |
+| `GEMINI_MODELS` | `gemini-3.8-flash,gemini-2.5-flash` | Modelo principal e reservas, em ordem |
+| `MAX_QUESTION_LENGTH` | 300 | Tamanho máximo da pergunta |
+| `MAX_ROWS` | 50 | Máximo de linhas por resposta |
+| `RATE_LIMIT_PER_MINUTE` | 20 | Perguntas por minuto por IP |
+| `CORS_ORIGINS` | `*` | Origens liberadas para o app web |
 
-[ ] Capacidade de analisar múltiplas tabelas e realizar joins.
+## Dados
 
-[ ] Implementar um sistema de cache para perguntas frequentes.
-
-### 📄 Licença
-Este projeto está sob a licença MIT. Veja o ficheiro LICENSE para mais detalhes.
+Os dados vêm da [PokéAPI](https://pokeapi.co), via os CSVs publicados em
+[github.com/PokeAPI/pokeapi](https://github.com/PokeAPI/pokeapi/tree/master/data/v2/csv). Pokémon e nomes são marcas
+da Nintendo/Game Freak/The Pokémon Company; este é um projeto acadêmico sem fins comerciais.

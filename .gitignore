@@ -1,0 +1,8 @@
+.env
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+.expo/
+dist/
+backend/data/raw/
