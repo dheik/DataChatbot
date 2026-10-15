@@ -117,7 +117,7 @@ EXPO_PUBLIC_API_URL=http://192.168.0.10:8000 npx expo start
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `GEMINI_API_KEY` | — | Chave do Google AI Studio |
-| `GEMINI_MODELS` | `gemini-3.8-flash,gemini-2.5-flash` | Modelo principal e reservas, em ordem |
+| `GEMINI_MODELS` | `gemini-3.8-flash,gemini-3.6-flash` | Modelo principal e reserva, em ordem |
 | `MAX_QUESTION_LENGTH` | 300 | Tamanho máximo da pergunta |
 | `MAX_ROWS` | 50 | Máximo de linhas por resposta |
 | `RATE_LIMIT_PER_MINUTE` | 20 | Perguntas por minuto por IP |

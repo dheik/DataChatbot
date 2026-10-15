@@ -50,6 +50,12 @@ export class ApiError extends Error {
   }
 }
 
+function isTransientGeminiError(error: unknown): error is ApiError {
+  return error instanceof ApiError
+    && error.code === 'gemini_unavailable'
+    && /\b(?:408|429|5\d{2})\b/.test(error.message);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -68,7 +74,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  ask: (question: string, sessionId: string) =>
-    request<AskResponse>('/api/ask', { method: 'POST', body: JSON.stringify({ question, session_id: sessionId }) }),
+  ask: async (question: string, sessionId: string) => {
+    const init = { method: 'POST', body: JSON.stringify({ question, session_id: sessionId }) };
+    try {
+      return await request<AskResponse>('/api/ask', init);
+    } catch (error) {
+      if (!isTransientGeminiError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return request<AskResponse>('/api/ask', init);
+    }
+  },
   examples: () => request<string[]>('/api/examples'),
 };
